@@ -3,7 +3,7 @@ const path = require('path');
 
 const LOG_PATH = path.join(__dirname, 'data', 'log.json');
 const LOG_JS_PATH = path.join(__dirname, 'data', 'log.js');
-const SOURCE_URL = 'https://api.frankfurter.app/latest?from=USD&to=KRW';
+const SOURCE_URL = 'https://api.frankfurter.dev/v1/latest?from=USD&to=KRW';
 
 function todayKST() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
