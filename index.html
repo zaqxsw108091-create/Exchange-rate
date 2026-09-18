@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>오늘의 진짜 정보판 — USD/KRW 환율</title>
+<style>
+  body { font-family: sans-serif; max-width: 480px; margin: 40px auto; line-height: 1.6; }
+  #status { color: #c0392b; font-weight: bold; }
+  .row { margin: 8px 0; }
+  .label { color: #888; font-size: 0.85em; }
+</style>
+</head>
+<body>
+  <h2>USD → KRW 환율</h2>
+
+  <div id="status"></div>
+
+  <div class="row">
+    <div class="label">값</div>
+    <div id="value">불러오는 중...</div>
+  </div>
+  <div class="row">
+    <div class="label">출처</div>
+    <div id="source"></div>
+  </div>
+  <div class="row">
+    <div class="label">출처 확정일 (observed)</div>
+    <div id="observed"></div>
+  </div>
+  <div class="row">
+    <div class="label">내가 조회한 시각 (fetched)</div>
+    <div id="fetched"></div>
+  </div>
+  <div class="row">
+    <div class="label">기준 시간대</div>
+    <div id="tz">Asia/Seoul (KST)</div>
+  </div>
+  <div class="row">
+    <div class="label">어제 대비</div>
+    <div id="diff"></div>
+  </div>
+
+<script src="app.js"></script>
+</body>
+</html>
