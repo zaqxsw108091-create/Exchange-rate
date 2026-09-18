@@ -99,6 +99,21 @@
   .row .val a { color: var(--accent); text-decoration: none; }
   .row .val a:hover { text-decoration: underline; }
 
+  #connect-folder {
+    margin-top: 10px;
+    width: 100%;
+    padding: 9px;
+    border: 1px dashed var(--muted);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  #connect-folder:hover { border-color: var(--accent); color: var(--accent); }
+  #connect-folder:disabled { border-color: var(--ok); color: var(--ok); cursor: default; }
+
   #update-now {
     margin-top: 14px;
     width: 100%;
@@ -161,10 +176,10 @@
   <div class="card">
     <div class="title-row">
       <h1>USD → KRW 환율</h1>
-      <span id="status" class="status status--ok">● 정상</span>
+      <span id="status" class="status status--error">⚠ 확인 중</span>
     </div>
 
-    <div class="value" id="value">불러오는 중...</div>
+    <div class="value" id="value">⛔ JS 미실행 (app.js 로드 실패)</div>
     <div class="diff" id="diff"></div>
     <div id="stale-note"></div>
 
@@ -175,6 +190,7 @@
       <div class="row"><span class="label">기준 시간대</span><span class="val">Asia/Seoul (KST)</span></div>
     </div>
 
+    <button id="connect-folder">📁 과제4번 폴더 연결 (자동 저장용, 최초 1회)</button>
     <button id="update-now">지금 업데이트</button>
     <button id="retry">다시 시도</button>
 
@@ -188,6 +204,10 @@
         <a href="?simulate=format">형식 변경</a>
         <a href="?" class="reset">정상으로 보기</a>
       </div>
+    </div>
+
+    <div style="margin-top:16px; text-align:center; font-size:0.7rem; color:#c7cbd4;">
+      build: 2026-09-18-v4
     </div>
   </div>
 

@@ -1,5 +1,6 @@
 const SOURCE_URL = 'https://api.frankfurter.dev/v1/latest?from=USD&to=KRW';
 const EXTRA_KEY = 'exchange_log_extra';
+let folderHandle = null; // 이번 창을 여는 동안만 기억됨 (새로고침하면 다시 선택 필요)
 
 const FAILURES = {
   slow: '외부 서버 응답이 느립니다 (지연/타임아웃 상황을 가정한 합성 값)',
@@ -26,6 +27,48 @@ function setStatus(kind, message) {
   badge.className = 'status status--' + kind;
   badge.textContent = message;
   document.getElementById('retry').style.display = kind === 'error' ? 'inline-block' : 'none';
+}
+
+// "과제4번" 폴더에 직접 저장하기 위해 브라우저 권한을 받아온다 (최초 1회, 이 창에서만 유효)
+async function connectFolder() {
+  if (!window.showDirectoryPicker) {
+    alert('이 브라우저는 폴더 자동 저장을 지원하지 않습니다. Chrome 또는 Edge 최신 버전을 사용해주세요.');
+    return false;
+  }
+  try {
+    folderHandle = await window.showDirectoryPicker();
+    const folderBtn = document.getElementById('connect-folder');
+    if (folderBtn) {
+      folderBtn.textContent = '✓ 폴더 연결됨 (자동 저장 켜짐)';
+      folderBtn.disabled = true;
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// 연결된 폴더의 data/log.json, data/log.js에 실제로 저장
+async function saveToFolder(log) {
+  if (!folderHandle) return false;
+  try {
+    const dataDir = await folderHandle.getDirectoryHandle('data', { create: true });
+
+    const jsonHandle = await dataDir.getFileHandle('log.json', { create: true });
+    const jsonWritable = await jsonHandle.createWritable();
+    await jsonWritable.write(JSON.stringify(log, null, 2));
+    await jsonWritable.close();
+
+    const jsHandle = await dataDir.getFileHandle('log.js', { create: true });
+    const jsWritable = await jsHandle.createWritable();
+    await jsWritable.write('window.EXCHANGE_LOG = ' + JSON.stringify(log, null, 2) + ';\n');
+    await jsWritable.close();
+
+    return true;
+  } catch (e) {
+    console.error('폴더 저장 실패:', e);
+    return false;
+  }
 }
 
 // node fetch-and-log.js가 만든 data/log.js(원본 기록)에
@@ -130,6 +173,11 @@ function render() {
       updateBtn.addEventListener('click', updateNow);
     }
 
+    const folderBtn = document.getElementById('connect-folder');
+    if (folderBtn) {
+      folderBtn.addEventListener('click', connectFolder);
+    }
+
     render();
   } catch (e) {
     // 스크립트가 조용히 멈추지 않고, 무슨 문제인지 화면에 바로 보여줌
@@ -178,7 +226,14 @@ async function updateNow() {
     if (idx >= 0) extra[idx] = record; else extra.push(record);
     localStorage.setItem(EXTRA_KEY, JSON.stringify(extra));
 
-    setStatus('ok', '● 정상 (방금 업데이트됨)');
+    // 폴더가 연결되어 있으면 data/log.json, data/log.js에 실제로 저장
+    let savedToFile = false;
+    if (folderHandle) {
+      const merged = getMergedLog();
+      savedToFile = await saveToFolder(merged);
+    }
+
+    setStatus('ok', savedToFile ? '● 정상 (방금 업데이트 + 파일 저장됨)' : '● 정상 (방금 업데이트됨)');
     paintValue(false);
   } catch (e) {
     setStatus('error', '⚠ 실시간 업데이트 실패: ' + e.message);
