@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const LOG_PATH = path.join(__dirname, 'data', 'log.json');
+const LOG_JS_PATH = path.join(__dirname, 'data', 'log.js');
 const SOURCE_URL = 'https://api.frankfurter.app/latest?from=USD&to=KRW';
 
 function todayKST() {
@@ -28,7 +29,14 @@ async function main() {
   if (idx >= 0) log[idx] = record;
   else log.push(record);
 
+  // 1) 원본 데이터 저장 (증거용)
   fs.writeFileSync(LOG_PATH, JSON.stringify(log, null, 2));
+
+  // 2) 브라우저에서 file://로 index.html을 그냥 열어도 보이도록
+  //    <script> 태그로 불러올 수 있는 JS 파일로도 저장
+  const jsContent = 'window.EXCHANGE_LOG = ' + JSON.stringify(log, null, 2) + ';\n';
+  fs.writeFileSync(LOG_JS_PATH, jsContent);
+
   console.log('기록 완료:', record);
 }
 

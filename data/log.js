@@ -1,4 +1,4 @@
-[
+window.EXCHANGE_LOG = [
   {
     "date_kst": "2026-09-18",
     "source_url": "https://api.frankfurter.app/latest?from=USD&to=KRW",
@@ -8,4 +8,4 @@
     "stored_value": 1382.55,
     "unit": "KRW per USD"
   }
-]
+];

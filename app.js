@@ -1,35 +1,190 @@
-async function render() {
-  const params = new URLSearchParams(location.search);
-  const sim = params.get('simulate');
+const SOURCE_URL = 'https://api.frankfurter.app/latest?from=USD&to=KRW';
+const EXTRA_KEY = 'exchange_log_extra';
 
-  let log;
+const FAILURES = {
+  slow: '외부 서버 응답이 느립니다 (지연/타임아웃 상황을 가정한 합성 값)',
+  unauthorized: '외부 원천 접근이 거부되었습니다 (401·403 합성 값)',
+  limit: '외부 원천 호출 횟수 제한에 걸렸습니다 (합성 값)',
+  offline: '네트워크에 연결할 수 없습니다 (오프라인 합성 값)',
+  format: '외부 응답 형식이 예상과 다릅니다 (합성 값)'
+};
+
+function todayKST() {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+}
+
+function fmtTime(iso) {
   try {
-    if (sim) throw { code: sim, synthetic: true };
-    const res = await fetch('data/log.json');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    log = await res.json();
-    if (!log.length) throw new Error('기록 없음');
+    return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
   } catch (e) {
-    document.getElementById('status').textContent = `실패: ${e.code || e.message}`;
-    document.getElementById('value').textContent = '표시할 값 없음';
-    return;
-  }
-
-  const sorted = [...log].sort((a, b) => a.date_kst.localeCompare(b.date_kst));
-  const latest = sorted[sorted.length - 1];
-  const prev = sorted[sorted.length - 2];
-
-  document.getElementById('value').textContent = `${latest.stored_value} ${latest.unit}`;
-  document.getElementById('source').textContent = latest.source_url;
-  document.getElementById('observed').textContent = latest.observed_at;
-  document.getElementById('fetched').textContent = latest.fetched_at;
-
-  if (prev) {
-    const diff = (latest.stored_value - prev.stored_value).toFixed(2);
-    document.getElementById('diff').textContent = `어제(${prev.date_kst}) 대비 ${diff >= 0 ? '+' : ''}${diff}`;
-  } else {
-    document.getElementById('diff').textContent = '아직 둘째 날 값 없음 (기록 조작하지 않음, 내일 다시 확인)';
+    return iso;
   }
 }
 
-render();
+function setStatus(kind, message) {
+  const badge = document.getElementById('status');
+  badge.className = 'status status--' + kind;
+  badge.textContent = message;
+  document.getElementById('retry').style.display = kind === 'error' ? 'inline-block' : 'none';
+}
+
+// node fetch-and-log.js가 만든 data/log.js(원본 기록)에
+// 브라우저에서 "지금 업데이트" 버튼으로 받아온 값을 겹쳐서 보여준다.
+// 같은 날짜면 더 최신 것(브라우저 값)으로 덮어씀 — 파일 자체는 건드리지 않음.
+function getMergedLog() {
+  const embedded = window.EXCHANGE_LOG || [];
+  let extra = [];
+  try { extra = JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch (e) { extra = []; }
+  const map = {};
+  embedded.forEach(function (r) { map[r.date_kst] = r; });
+  extra.forEach(function (r) { map[r.date_kst] = r; });
+  return Object.values(map);
+}
+
+function getLatestAndPrev() {
+  const sorted = getMergedLog().sort((a, b) => a.date_kst.localeCompare(b.date_kst));
+  return { latest: sorted[sorted.length - 1], prev: sorted[sorted.length - 2] };
+}
+
+// 실패 상태여도 마지막 정상값(latest)은 그대로 화면에 남기고,
+// "오래된 값일 수 있음" 안내만 붙인다 (값을 지우지 않음 = C17)
+function paintValue(isStale) {
+  const { latest, prev } = getLatestAndPrev();
+
+  if (!latest) {
+    document.getElementById('value').textContent = '표시할 값 없음';
+    document.getElementById('source').textContent = '-';
+    document.getElementById('observed').textContent = '-';
+    document.getElementById('fetched').textContent = '-';
+    document.getElementById('diff').textContent = '아직 기록이 없습니다. node fetch-and-log.js를 먼저 실행하세요.';
+    document.getElementById('stale-note').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('value').textContent =
+    latest.stored_value.toLocaleString('ko-KR') + ' ' + latest.unit;
+  document.getElementById('source').innerHTML =
+    '<a href="' + latest.source_url + '" target="_blank" rel="noopener">' + latest.source_url + '</a>';
+  document.getElementById('observed').textContent = latest.observed_at;
+  document.getElementById('fetched').textContent = fmtTime(latest.fetched_at);
+
+  const diffEl = document.getElementById('diff');
+  if (prev) {
+    const diff = (latest.stored_value - prev.stored_value).toFixed(2);
+    const sign = Number(diff) >= 0 ? '+' : '';
+    diffEl.textContent = '어제(' + prev.date_kst + ') 대비 ' + sign + diff;
+    diffEl.className = 'diff ' + (Number(diff) >= 0 ? 'diff--up' : 'diff--down');
+  } else {
+    diffEl.textContent = '아직 둘째 날 값 없음 (기록을 조작하지 않고, 다음 실제 날짜에 다시 확인)';
+    diffEl.className = 'diff';
+  }
+
+  const staleNote = document.getElementById('stale-note');
+  if (isStale) {
+    staleNote.style.display = 'block';
+    staleNote.textContent =
+      '마지막 정상값(' + latest.date_kst + ' 기준)을 그대로 유지 중입니다. 실시간 값이 아닐 수 있습니다.';
+  } else {
+    staleNote.style.display = 'none';
+  }
+}
+
+function render() {
+  const params = new URLSearchParams(location.search);
+  const sim = params.get('simulate');
+
+  // '느림'은 실제로 화면 갱신을 지연시켜서 응답이 늦게 오는 상황을 그대로 재현
+  // (2초 대기 → 타임아웃으로 실패 처리, 그동안 마지막 정상값은 그대로 유지)
+  if (sim === 'slow') {
+    setStatus('loading', '⏳ 응답 대기 중...');
+    paintValue(false);
+    setTimeout(function () {
+      setStatus('error', '⚠ ' + FAILURES.slow);
+      paintValue(true);
+    }, 2000);
+    return;
+  }
+
+  if (sim) {
+    setStatus('error', '⚠ ' + (FAILURES[sim] || '알 수 없는 오류 (합성 값)'));
+    paintValue(true);
+  } else {
+    setStatus('ok', '● 정상');
+    paintValue(false);
+  }
+}
+
+(function init() {
+  try {
+    const retryBtn = document.getElementById('retry');
+    if (retryBtn) {
+      retryBtn.addEventListener('click', function () {
+        const url = new URL(location.href);
+        url.searchParams.delete('simulate');
+        location.href = url.toString();
+      });
+    }
+
+    const updateBtn = document.getElementById('update-now');
+    if (updateBtn) {
+      updateBtn.addEventListener('click', updateNow);
+    }
+
+    render();
+  } catch (e) {
+    // 스크립트가 조용히 멈추지 않고, 무슨 문제인지 화면에 바로 보여줌
+    const valueEl = document.getElementById('value');
+    const statusEl = document.getElementById('status');
+    if (valueEl) valueEl.textContent = '초기화 오류: ' + e.message;
+    if (statusEl) {
+      statusEl.textContent = '⚠ 스크립트 오류';
+      statusEl.className = 'status status--error';
+    }
+    console.error(e);
+  }
+})();
+
+// "지금 업데이트" 버튼 — 브라우저에서 바로 실제 값을 조회
+async function updateNow() {
+  const btn = document.getElementById('update-now');
+  const params = new URLSearchParams(location.search);
+  if (params.get('simulate')) {
+    // 실패 테스트 화면에서는 그 상태를 유지 (혼동 방지)
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '조회 중...';
+  setStatus('loading', '⏳ 실시간 조회 중...');
+
+  try {
+    const res = await fetch(SOURCE_URL);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const record = {
+      date_kst: todayKST(),
+      source_url: SOURCE_URL,
+      observed_at: data.date,
+      fetched_at: new Date().toISOString(),
+      raw_value: data.rates.KRW,
+      stored_value: Number(data.rates.KRW.toFixed(2)),
+      unit: 'KRW per USD'
+    };
+
+    let extra = [];
+    try { extra = JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch (e) { extra = []; }
+    const idx = extra.findIndex(function (r) { return r.date_kst === record.date_kst; });
+    if (idx >= 0) extra[idx] = record; else extra.push(record);
+    localStorage.setItem(EXTRA_KEY, JSON.stringify(extra));
+
+    setStatus('ok', '● 정상 (방금 업데이트됨)');
+    paintValue(false);
+  } catch (e) {
+    setStatus('error', '⚠ 실시간 업데이트 실패: ' + e.message);
+    paintValue(true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '지금 업데이트';
+  }
+}
