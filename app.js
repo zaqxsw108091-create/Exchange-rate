@@ -1,4 +1,4 @@
-const SOURCE_URL = 'https://api.frankfurter.app/latest?from=USD&to=KRW';
+const SOURCE_URL = 'https://api.frankfurter.dev/v1/latest?from=USD&to=KRW';
 const EXTRA_KEY = 'exchange_log_extra';
 
 const FAILURES = {
