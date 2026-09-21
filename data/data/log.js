@@ -8,20 +8,11 @@ window.EXCHANGE_LOG = [
     "stored_value": 1382.55,
     "unit": "KRW per USD"
   },
-    {
+  {
     "date_kst": "2026-09-20",
     "source_url": "https://api.frankfurter.dev/v1/latest?from=USD&to=KRW",
     "observed_at": "2026-09-18",
-    "fetched_at": "2026-09-19T15:52:14.381Z",
-    "raw_value": 1388.1,
-    "stored_value": 1388.1,
-    "unit": "KRW per USD"
-  },
-  {
-    "date_kst": "2026-09-21",
-    "source_url": "https://api.frankfurter.dev/v1/latest?from=USD&to=KRW",
-    "observed_at": "2026-09-18",
-    "fetched_at": "2026-09-21T00:43:38.809Z",
+    "fetched_at": "2026-09-20T10:28:08.110Z",
     "raw_value": 1388.1,
     "stored_value": 1388.1,
     "unit": "KRW per USD"
