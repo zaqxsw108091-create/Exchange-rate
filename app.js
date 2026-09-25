@@ -10,6 +10,38 @@ const FAILURES = {
   format: '외부 응답 형식이 예상과 다릅니다 (합성 값)'
 };
 
+const RETRY_CONFIG = { maxRetries: 3, baseDelayMs: 1000 };
+const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30분
+let isFetching = false;
+
+function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+
+async function fetchWithRetry(url, maxRetries, baseDelayMs) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res;
+    } catch (e) {
+      lastError = e;
+      if (attempt < maxRetries) {
+        setStatus('loading', '⏳ 재시도 중 (' + (attempt + 1) + '/' + maxRetries + ')...');
+        await sleep(baseDelayMs * Math.pow(2, attempt)); // 1000 -> 2000 -> 4000
+      }
+    }
+  }
+  throw lastError;
+}
+
+function formatElapsed(iso) {
+  if (!iso) return null;
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1) return '방금 전';
+  if (min < 30) return min + '분 전';
+  return '오래된 데이터 (' + min + '분 전)';
+}
+
 function todayKST() {
   return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
 }
@@ -122,6 +154,18 @@ function paintValue(isStale) {
     diffEl.className = 'diff';
   }
 
+  const ageEl = document.getElementById('cache-age');
+  if (ageEl) {
+    if (latest && latest.fetched_at) {
+      ageEl.textContent = formatElapsed(latest.fetched_at);
+      ageEl.style.display = 'block';
+      const ms = Date.now() - new Date(latest.fetched_at).getTime();
+      ageEl.className = ms >= STALE_THRESHOLD_MS ? 'cache-age--old' : '';
+    } else {
+      ageEl.style.display = 'none';
+    }
+  }
+
   const staleNote = document.getElementById('stale-note');
   if (isStale) {
     staleNote.style.display = 'block';
@@ -194,6 +238,7 @@ function render() {
 
 // "지금 업데이트" 버튼 — 브라우저에서 바로 실제 값을 조회
 async function updateNow() {
+  if (isFetching) return; // 중복 요청 방지 (T-10)
   const btn = document.getElementById('update-now');
   const params = new URLSearchParams(location.search);
   if (params.get('simulate')) {
@@ -201,13 +246,13 @@ async function updateNow() {
     return;
   }
 
+  isFetching = true;
   btn.disabled = true;
   btn.textContent = '조회 중...';
   setStatus('loading', '⏳ 실시간 조회 중...');
 
   try {
-    const res = await fetch(SOURCE_URL);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const res = await fetchWithRetry(SOURCE_URL, RETRY_CONFIG.maxRetries, RETRY_CONFIG.baseDelayMs);
     const data = await res.json();
 
     const record = {
@@ -236,9 +281,10 @@ async function updateNow() {
     setStatus('ok', savedToFile ? '● 정상 (방금 업데이트 + 파일 저장됨)' : '● 정상 (방금 업데이트됨)');
     paintValue(false);
   } catch (e) {
-    setStatus('error', '⚠ 실시간 업데이트 실패: ' + e.message);
+    setStatus('error', '⚠ ' + RETRY_CONFIG.maxRetries + '회 재시도 후에도 실패: ' + e.message);
     paintValue(true);
   } finally {
+    isFetching = false;
     btn.disabled = false;
     btn.textContent = '지금 업데이트';
   }

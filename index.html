@@ -72,6 +72,7 @@
   }
   .diff--up { color: var(--up); }
   .diff--down { color: var(--down); }
+  .cache-age--old { color: var(--error) !important; font-weight: 600; }
 
   #stale-note {
     display: none;
@@ -182,6 +183,7 @@
     <div class="value" id="value">⛔ JS 미실행 (app.js 로드 실패)</div>
     <div class="diff" id="diff"></div>
     <div id="stale-note"></div>
+    <div id="cache-age" style="display:none; font-size:0.78rem; color:var(--muted); margin-bottom:12px;"></div>
 
     <div class="meta">
       <div class="row"><span class="label">출처</span><span class="val" id="source">-</span></div>
