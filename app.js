@@ -16,6 +16,11 @@ let isFetching = false;
 
 function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
 
+// 재시도 간격 계산 — UI/네트워크에 의존하지 않는 순수 함수 (Node에서도 바로 테스트 가능)
+function getRetryDelay(attempt, baseDelayMs) {
+  return baseDelayMs * Math.pow(2, attempt); // attempt 0→1000, 1→2000, 2→4000
+}
+
 async function fetchWithRetry(url, maxRetries, baseDelayMs) {
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -27,11 +32,17 @@ async function fetchWithRetry(url, maxRetries, baseDelayMs) {
       lastError = e;
       if (attempt < maxRetries) {
         setStatus('loading', '⏳ 재시도 중 (' + (attempt + 1) + '/' + maxRetries + ')...');
-        await sleep(baseDelayMs * Math.pow(2, attempt)); // 1000 -> 2000 -> 4000
+        await sleep(getRetryDelay(attempt, baseDelayMs));
       }
     }
   }
   throw lastError;
+}
+
+// Node(테스트 스크립트)에서 이 파일의 순수 함수만 가져다 쓸 수 있게 함.
+// 브라우저에서는 window에 module이 없으므로 아무 영향 없음.
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { getRetryDelay, formatElapsed, RETRY_CONFIG };
 }
 
 function formatElapsed(iso) {
@@ -218,6 +229,7 @@ function render() {
   }
 }
 
+if (typeof document !== 'undefined') {
 (function init() {
   try {
     const retryBtn = document.getElementById('retry');
@@ -252,6 +264,7 @@ function render() {
     console.error(e);
   }
 })();
+}
 
 // "지금 업데이트" 버튼 — 브라우저에서 바로 실제 값을 조회
 async function updateNow() {
