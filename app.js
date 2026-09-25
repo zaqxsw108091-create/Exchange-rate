@@ -20,7 +20,7 @@ async function fetchWithRetry(url, maxRetries, baseDelayMs) {
   let lastError;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const res = await fetch(url);
+      const res = await fetch(url, { cache: 'no-store' }); // 브라우저 캐시 사용 금지 — 진짜 네트워크 상태만 반영
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res;
     } catch (e) {
@@ -176,6 +176,23 @@ function paintValue(isStale) {
   }
 }
 
+// 실패 시뮬레이션 버튼을 눌렀을 때도 실제 재시도 로직과 똑같은 과정을
+// 화면에 그대로 재생한다 (와이파이를 끄지 않아도 재시도 동작을 볼 수 있게).
+function simulateRetryLoop(finalMessage) {
+  let attempt = 0;
+  function tick() {
+    if (attempt < RETRY_CONFIG.maxRetries) {
+      attempt++;
+      setStatus('loading', '⏳ 재시도 중 (' + attempt + '/' + RETRY_CONFIG.maxRetries + ')...');
+      setTimeout(tick, RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1));
+    } else {
+      setStatus('error', '⚠ ' + RETRY_CONFIG.maxRetries + '회 재시도 후에도 실패: ' + finalMessage);
+      paintValue(true);
+    }
+  }
+  tick();
+}
+
 function render() {
   const params = new URLSearchParams(location.search);
   const sim = params.get('simulate');
@@ -193,8 +210,8 @@ function render() {
   }
 
   if (sim) {
-    setStatus('error', '⚠ ' + (FAILURES[sim] || '알 수 없는 오류 (합성 값)'));
-    paintValue(true);
+    paintValue(false); // 재시도 중에는 기존 값을 그대로 보여주다가
+    simulateRetryLoop(FAILURES[sim] || '알 수 없는 오류 (합성 값)');
   } else {
     setStatus('ok', '● 정상');
     paintValue(false);
